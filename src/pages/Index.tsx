@@ -34,7 +34,6 @@ import {
   NeedType,
   Priority,
   TaskStatus,
-  matchVolunteers,
 } from "@/lib/needfirst";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { TaskCard } from "@/components/TaskCard";
