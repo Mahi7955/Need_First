@@ -1,6 +1,7 @@
 export type NeedType = "food" | "medical" | "shelter" | "other";
 export type Urgency = "high" | "medium" | "low";
 export type Priority = "High" | "Medium" | "Low";
+export type TaskStatus = "open" | "assigned" | "completed";
 
 export interface ParsedNeed {
   need_type: NeedType;
@@ -9,14 +10,37 @@ export interface ParsedNeed {
   urgency: Urgency;
 }
 
+export interface ChatMessage {
+  id: string;
+  from: "ngo" | "volunteer";
+  text: string;
+  at: number;
+}
+
+export interface ResourceProgress {
+  label: string;
+  required: number;
+  fulfilled: number;
+}
+
 export interface Task extends ParsedNeed {
   id: string;
   raw: string;
   score: number;
   priority: Priority;
-  assigned?: string;
+  assigned?: string; // legacy single name
+  team: string[]; // volunteer names
   accepted?: boolean;
   createdAt: number;
+  acceptedAt?: number;
+  completedAt?: number;
+  status: TaskStatus;
+  resources: ResourceProgress[];
+  messages: ChatMessage[];
+  reassigned?: boolean;
+  // mock map coords (0-100 in svg space)
+  x: number;
+  y: number;
 }
 
 export interface Volunteer {
@@ -25,11 +49,22 @@ export interface Volunteer {
   skills: NeedType[];
   location: string;
   availability: boolean;
+  completed: number;
+  impact: number;
+  x: number;
+  y: number;
+}
+
+export interface MatchBreakdown {
+  skill: number;
+  location: number;
+  urgency: number;
 }
 
 export interface VolunteerMatch {
   volunteer: Volunteer;
   score: number;
+  breakdown: MatchBreakdown;
   explanation: string;
 }
 
@@ -38,7 +73,17 @@ export interface Suggestion {
   value: number;
 }
 
-const KNOWN_LOCATIONS = ["Whitefield", "Indiranagar", "Marathahalli", "Koramangala", "HSR Layout"];
+export const KNOWN_LOCATIONS = ["Whitefield", "Indiranagar", "Marathahalli", "Koramangala", "HSR Layout"];
+
+// Mock map coordinates per location (percent within svg viewbox 0-100)
+export const LOCATION_COORDS: Record<string, { x: number; y: number }> = {
+  Whitefield: { x: 78, y: 38 },
+  Indiranagar: { x: 52, y: 30 },
+  Marathahalli: { x: 68, y: 48 },
+  Koramangala: { x: 42, y: 60 },
+  "HSR Layout": { x: 50, y: 72 },
+  Unknown: { x: 30, y: 50 },
+};
 
 export function parseRequest(text: string): ParsedNeed {
   const lower = text.toLowerCase();
@@ -89,12 +134,18 @@ export function suggestions(n: ParsedNeed): Suggestion[] {
   return out;
 }
 
+export function buildResources(n: ParsedNeed): ResourceProgress[] {
+  return suggestions(n).map((s) => ({ label: s.label, required: s.value, fulfilled: 0 }));
+}
+
 export const SAMPLE_VOLUNTEERS: Volunteer[] = [
-  { id: "v1", name: "Rahul", skills: ["food"], location: "Whitefield", availability: true },
-  { id: "v2", name: "Sneha", skills: ["food"], location: "Whitefield", availability: true },
-  { id: "v3", name: "Ananya", skills: ["medical"], location: "Indiranagar", availability: true },
-  { id: "v4", name: "Vikram", skills: ["medical"], location: "Whitefield", availability: true },
-  { id: "v5", name: "Arjun", skills: ["other"], location: "Marathahalli", availability: true },
+  { id: "v1", name: "Rahul",  skills: ["food"],    location: "Whitefield",   availability: true, completed: 12, impact: 240, x: 80, y: 36 },
+  { id: "v2", name: "Sneha",  skills: ["food"],    location: "Whitefield",   availability: true, completed: 8,  impact: 160, x: 76, y: 42 },
+  { id: "v3", name: "Ananya", skills: ["medical"], location: "Indiranagar",  availability: true, completed: 15, impact: 320, x: 54, y: 28 },
+  { id: "v4", name: "Vikram", skills: ["medical"], location: "Whitefield",   availability: true, completed: 6,  impact: 120, x: 82, y: 40 },
+  { id: "v5", name: "Arjun",  skills: ["other"],   location: "Marathahalli", availability: true, completed: 4,  impact: 60,  x: 70, y: 50 },
+  { id: "v6", name: "Priya",  skills: ["shelter"], location: "Koramangala",  availability: true, completed: 10, impact: 200, x: 44, y: 62 },
+  { id: "v7", name: "Karthik",skills: ["shelter","food"], location: "HSR Layout", availability: true, completed: 7, impact: 140, x: 52, y: 74 },
 ];
 
 export function matchVolunteers(task: Task, volunteers: Volunteer[]): VolunteerMatch[] {
@@ -102,23 +153,22 @@ export function matchVolunteers(task: Task, volunteers: Volunteer[]): VolunteerM
   const matches = volunteers
     .filter((v) => v.availability)
     .map((v) => {
-      let score = 0;
-      const reasons: string[] = [];
       const skillFit = v.skills.includes(task.need_type);
-      if (skillFit) {
-        score += 50;
-        reasons.push("skill fit");
-      }
-      if (v.location === task.location) {
-        score += 30;
-        reasons.push("nearby");
-      }
-      score += urgencyBoost;
+      const locFit = v.location === task.location;
+      const breakdown: MatchBreakdown = {
+        skill: skillFit ? 50 : 0,
+        location: locFit ? 30 : 0,
+        urgency: urgencyBoost,
+      };
+      const score = breakdown.skill + breakdown.location + breakdown.urgency;
+      const reasons: string[] = [];
+      if (skillFit) reasons.push("skill fit");
+      if (locFit) reasons.push("nearby");
       if (task.urgency === "high") reasons.push("high urgency");
       const explanation = reasons.length
         ? `Matched because ${reasons.join(" + ")}`
         : "Available volunteer";
-      return { volunteer: v, score, explanation };
+      return { volunteer: v, score, breakdown, explanation };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
@@ -127,7 +177,22 @@ export function matchVolunteers(task: Task, volunteers: Volunteer[]): VolunteerM
 
 export function topTasksForVolunteer(tasks: Task[]): Task[] {
   return [...tasks]
-    .filter((t) => !t.assigned)
+    .filter((t) => t.status !== "completed")
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
+}
+
+export function formatRelative(ms: number): string {
+  const diff = Math.max(0, Date.now() - ms);
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min${m !== 1 ? "s" : ""} ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hr${h !== 1 ? "s" : ""} ago`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d !== 1 ? "s" : ""} ago`;
+}
+
+export function minutesBetween(a: number, b: number): number {
+  return Math.max(0, Math.floor((b - a) / 60000));
 }
