@@ -47,6 +47,17 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        priority: {
+          high: "hsl(var(--priority-high))",
+          "high-bg": "hsl(var(--priority-high-bg))",
+          "high-border": "hsl(var(--priority-high-border))",
+          medium: "hsl(var(--priority-medium))",
+          "medium-bg": "hsl(var(--priority-medium-bg))",
+          "medium-border": "hsl(var(--priority-medium-border))",
+          low: "hsl(var(--priority-low))",
+          "low-bg": "hsl(var(--priority-low-bg))",
+          "low-border": "hsl(var(--priority-low-border))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
