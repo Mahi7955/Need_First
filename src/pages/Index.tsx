@@ -18,6 +18,7 @@ import {
   ListChecks,
   CheckCircle2,
   Filter,
+  UserRound as UserIcon,
 } from "lucide-react";
 import {
   parseRequest,
@@ -25,6 +26,7 @@ import {
   suggestions,
   buildResources,
   Task,
+  Volunteer,
   VolunteerMatch,
   SAMPLE_VOLUNTEERS,
   topTasksForVolunteer,
@@ -43,6 +45,7 @@ import { MapView } from "@/components/MapView";
 import { Leaderboard } from "@/components/Leaderboard";
 import { ImpactAnalytics } from "@/components/ImpactAnalytics";
 import { VoiceInput } from "@/components/VoiceInput";
+import { VolunteerTracker } from "@/components/VolunteerTracker";
 import {
   Select,
   SelectContent,
@@ -60,6 +63,7 @@ const EXAMPLES = [
 const Index = () => {
   const [text, setText] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [volunteers, setVolunteers] = useState<Volunteer[]>(SAMPLE_VOLUNTEERS);
   const [lastParsed, setLastParsed] = useState<{ parsed: ParsedNeed; priority: Priority } | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [, forceTick] = useState(0);
@@ -267,7 +271,7 @@ const Index = () => {
             </div>
           </div>
           <div className="text-xs text-muted-foreground hidden sm:block">
-            {tasks.length} task{tasks.length !== 1 ? "s" : ""} · {SAMPLE_VOLUNTEERS.length} volunteers
+            {tasks.length} task{tasks.length !== 1 ? "s" : ""} · {volunteers.length} volunteers
           </div>
         </div>
       </header>
@@ -280,6 +284,9 @@ const Index = () => {
             </TabsTrigger>
             <TabsTrigger value="volunteer" className="gap-2">
               <UserRound className="w-4 h-4" /> Volunteer
+            </TabsTrigger>
+            <TabsTrigger value="volunteers" className="gap-2">
+              <UserIcon className="w-4 h-4" /> Volunteers
             </TabsTrigger>
             <TabsTrigger value="map" className="gap-2">
               <MapIcon className="w-4 h-4" /> Map
@@ -507,12 +514,23 @@ const Index = () => {
             )}
           </TabsContent>
 
+          <TabsContent value="volunteers">
+            <VolunteerTracker
+              volunteers={volunteers}
+              tasks={tasks}
+              onAdd={(v) => setVolunteers((vs) => [v, ...vs])}
+              onToggleAvailability={(id) =>
+                setVolunteers((vs) => vs.map((x) => (x.id === id ? { ...x, availability: !x.availability } : x)))
+              }
+            />
+          </TabsContent>
+
           <TabsContent value="map">
-            <MapView tasks={tasks} volunteers={SAMPLE_VOLUNTEERS} />
+            <MapView tasks={tasks} volunteers={volunteers} />
           </TabsContent>
 
           <TabsContent value="leaderboard">
-            <Leaderboard volunteers={SAMPLE_VOLUNTEERS} />
+            <Leaderboard volunteers={volunteers} />
           </TabsContent>
 
           <TabsContent value="analytics">
@@ -523,7 +541,7 @@ const Index = () => {
 
       <VolunteerMatchDialog
         task={activeTask}
-        volunteers={SAMPLE_VOLUNTEERS}
+        volunteers={volunteers}
         onClose={() => setActiveTask(null)}
         onAssign={handleAssign}
       />
